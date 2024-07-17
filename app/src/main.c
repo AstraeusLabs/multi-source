@@ -173,7 +173,7 @@ int lc3bin_read_data(struct broadcast_source_stream *source_stream, uint8_t **da
 
 	*data += nbytes;
 
-	if (*data > source_stream->end_data_ptr) {
+	if (*data >= source_stream->end_data_ptr) {
 		*data = source_stream->start_data_ptr;
 		printk("End of LC3 array reached => looping., source stream> %p\n", source_stream);
 	}
