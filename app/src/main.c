@@ -37,43 +37,25 @@ BUILD_ASSERT(CONFIG_BT_ISO_TX_BUF_COUNT >= TOTAL_BUF_NEEDED,
 	     "CONFIG_BT_ISO_TX_BUF_COUNT should be at least "
 	     "BROADCAST_ENQUEUE_COUNT * CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT");
 
-#if defined(CONFIG_BAP_BROADCAST_16_2_1)
-
-static struct bt_bap_lc3_preset preset_active = BT_BAP_LC3_BROADCAST_PRESET_16_2_1(
-	BT_AUDIO_LOCATION_FRONT_LEFT,
+static struct bt_bap_lc3_preset preset_16_mono = BT_BAP_LC3_BROADCAST_PRESET_16_2_1(
+	BT_AUDIO_LOCATION_MONO_AUDIO,
 	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
 
-#define BT_AUDIO_BROADCAST_NAME "16Khz Stereo"
-
-#define SAMPLES_PER_FRAME	160
-
-static const uint8_t lc3_left[] = {
-#include "Sine1000Hz_1s_16.lc3.inc"
-};
-
-static const uint8_t lc3_right[] = {
-#include "Sine1500Hz_1s_16.lc3.inc"
-};
-
-#elif defined(CONFIG_BAP_BROADCAST_24_2_1)
-
-static struct bt_bap_lc3_preset preset_active = BT_BAP_LC3_BROADCAST_PRESET_24_2_1(
-	BT_AUDIO_LOCATION_FRONT_LEFT,
+static struct bt_bap_lc3_preset preset_16_stereo = BT_BAP_LC3_BROADCAST_PRESET_16_2_1(
+	BT_AUDIO_LOCATION_FRONT_LEFT | BT_AUDIO_LOCATION_FRONT_RIGHT,
 	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
 
-#define BT_AUDIO_BROADCAST_NAME "24Khz Stereo"
+static struct bt_bap_lc3_preset preset_24_stereo = BT_BAP_LC3_BROADCAST_PRESET_24_2_1(
+	BT_AUDIO_LOCATION_FRONT_LEFT | BT_AUDIO_LOCATION_FRONT_RIGHT,
+	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
 
-#define SAMPLES_PER_FRAME	240
+static struct bt_bap_lc3_preset preset_48_stereo = BT_BAP_LC3_BROADCAST_PRESET_48_2_1(
+	BT_AUDIO_LOCATION_FRONT_LEFT | BT_AUDIO_LOCATION_FRONT_RIGHT,
+	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
 
-static const uint8_t lc3_left[] = {
-#include "Sine1000Hz_1s_24.lc3.inc"
-};
+#define BT_AUDIO_BROADCAST_NAME "Multi source"
 
-static const uint8_t lc3_right[] = {
-#include "Sine1500Hz_1s_24.lc3.inc"
-};
-
-#endif
+#include "sine_data.h"
 
 static struct broadcast_source_stream {
 	struct bt_bap_stream stream;
@@ -208,7 +190,7 @@ static void send_data(struct broadcast_source_stream *source_stream)
 	}
 
 	net_buf_reserve(buf, BT_ISO_CHAN_SEND_RESERVE);
-	net_buf_add_mem(buf, read_buffer, preset_active.qos.sdu); // TBD
+	net_buf_add_mem(buf, read_buffer, stream->qos->sdu);
 
 	ret = bt_bap_stream_send(stream, buf, source_stream->seq_num++);
 	if (ret < 0) {
@@ -259,49 +241,88 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	int srate_hz;
 	int nchannels;
 	int nsamples;
+	int sdu;
 	int ret;
+	int samples_per_frame;
 
 	struct bt_bap_broadcast_source_stream_param
 		stream_params[CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT];
 	struct bt_bap_broadcast_source_subgroup_param
 		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
 	struct bt_bap_broadcast_source_param create_param = {0};
+	uint8_t mono[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
+					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_MONO_AUDIO))};
 	uint8_t left[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
 					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_FRONT_LEFT))};
 	uint8_t right[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
 					       BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_FRONT_RIGHT))};
 	int err;
 
-	subgroup_param[0].params_count = 2;
-	subgroup_param[0].params = stream_params;
-	subgroup_param[0].codec_cfg = &preset_active.codec_cfg;
+	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+		subgroup_param[i].params_count = 2;
+		subgroup_param[i].params = stream_params + i * 2;
+		subgroup_param[i].codec_cfg = i == 0 ? &preset_24_stereo.codec_cfg : &preset_16_stereo.codec_cfg;
+	}
 
 	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
-		streams[j].data_ptr = j == 0 ? (uint8_t *)lc3_left : (uint8_t *)lc3_right;
+		/**
+		 * Use different frequencies for each BIS to allow
+		 * identification by frequency analysis on the sink side.
+		 * TBD: How big frequency jumps should be used for good identification.
+		 */
+		switch(j) {
+			case 0:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0200_24;
+				stream_params[j].data = left;
+				stream_params[j].data_len = sizeof(left);
+				samples_per_frame = 240;
+				sdu = preset_24_stereo.qos.sdu;
+				break;
+			case 1:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0320_24;
+				stream_params[j].data = right;
+				stream_params[j].data_len = sizeof(right);
+				samples_per_frame = 240;
+				sdu = preset_24_stereo.qos.sdu;
+				break;
+			case 2:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0500_16;
+				stream_params[j].data = left;
+				stream_params[j].data_len = sizeof(left);
+				samples_per_frame = 160;
+				sdu = preset_16_stereo.qos.sdu;
+				break;
+			case 3:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_1000_16;
+				stream_params[j].data = right;
+				stream_params[j].data_len = sizeof(right);
+				samples_per_frame = 160;
+				sdu = preset_16_stereo.qos.sdu;
+				break;
+		}
+
+		printk("Reading LC3 Music header (%p)\n", streams[j].data_ptr);
+		printk("======================\n");
 
 		ret = lc3bin_read_header(&streams[j].data_ptr, &frame_us, &srate_hz, &nchannels, &nsamples);
 
-		printk("LC3 Music header read:\n");
-		printk("======================\n");
 		printk("Frame size: %dus\n", frame_us);
 		printk("Sample rate: %dHz\n", srate_hz);
 		printk("Number of channels: %d\n", nchannels);
 		printk("Number of samples: %d\n", nsamples);
 
-		/* Store position of first block */
+		/* Store position of start and end+1 of frame blocks */
 		streams[j].start_data_ptr = streams[j].data_ptr;
-		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / SAMPLES_PER_FRAME) *
-			(preset_active.qos.sdu + 2); // TBD
+		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
+			(sdu + 2); // TBD
 
 		stream_params[j].stream = &streams[j].stream;
-		stream_params[j].data = j == 0 ? left : right;
-		stream_params[j].data_len = j == 0 ? sizeof(left) : sizeof(right);
 		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
 	}
 
-	create_param.params_count = 1;
+	create_param.params_count = ARRAY_SIZE(subgroup_param);
 	create_param.params = subgroup_param;
-	create_param.qos = &preset_active.qos;
+	create_param.qos = &preset_24_stereo.qos; // TBD, this should be the qos from the larger config if multiple
 	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
 	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
 
