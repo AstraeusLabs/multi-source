@@ -4,19 +4,19 @@
 
 mainmenu "Bluetooth: Broadcast Audio Source"
 
-choice BAP_LC3_PRESET
-	prompt "The BAP LC3 Preset to be used"
-	default BAP_BROADCAST_16_2_1
+choice BASE_CONFIGURATION
+	prompt "The BASE configuration to be used"
+	default BASE_CONFIG_24S_16S
 
-config BAP_BROADCAST_16_2_1
-	bool "BAP_LC3_BROADCAST_PRESET_16_2_1 preset"
+config BASE_CONFIG_24S_16S
+	bool "24 KHz stereo and 16 KHz stereo"
 	help
-	  Using the BAP_LC3_BROADCAST_PRESET_16_2_1 preset.
+	  Using the 4 configuration.
 
-config BAP_BROADCAST_24_2_1
-	bool "BAP_LC3_BROADCAST_PRESET_24_2_1 preset"
+config BASE_CONFIG_5_16M
+	bool "5 subgroups with 16 KHz mono"
 	help
-	  Using the BAP_LC3_BROADCAST_PRESET_24_2_1 preset.
+	  Using the BASE_CONFIG_5_16M configuration.
 
 endchoice
 

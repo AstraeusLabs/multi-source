@@ -235,6 +235,7 @@ static struct bt_bap_stream_ops stream_ops = {
 	.sent = stream_sent_cb
 };
 
+#if defined(CONFIG_BASE_CONFIG_24S_16S)
 static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 {
 	int frame_us;
@@ -250,8 +251,6 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	struct bt_bap_broadcast_source_subgroup_param
 		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
 	struct bt_bap_broadcast_source_param create_param = {0};
-	uint8_t mono[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
-					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_MONO_AUDIO))};
 	uint8_t left[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
 					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_FRONT_LEFT))};
 	uint8_t right[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
@@ -334,6 +333,96 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 
 	return 0;
 }
+#elif defined(CONFIG_BASE_CONFIG_5_16M)
+static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
+{
+	int frame_us;
+	int srate_hz;
+	int nchannels;
+	int nsamples;
+	int sdu;
+	int ret;
+	int samples_per_frame;
+
+	struct bt_bap_broadcast_source_stream_param
+		stream_params[CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT];
+	struct bt_bap_broadcast_source_subgroup_param
+		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+	struct bt_bap_broadcast_source_param create_param = {0};
+	uint8_t mono[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
+					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_MONO_AUDIO))};
+	int err;
+
+	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+		subgroup_param[i].params_count = 1;
+		subgroup_param[i].params = &stream_params[i];
+		subgroup_param[i].codec_cfg = &preset_16_mono.codec_cfg;
+
+		// TODO: Set different languages for each subgroup.
+	}
+
+	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
+		/**
+		 * Use different frequencies for each BIS to allow
+		 * identification by frequency analysis on the sink side.
+		 * TBD: How big frequency jumps should be used for good identification.
+		 */
+		stream_params[j].data = mono;
+		stream_params[j].data_len = sizeof(mono);
+		samples_per_frame = 160;
+		sdu = preset_16_mono.qos.sdu;
+		switch(j) {
+			case 0:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0200_16;
+				break;
+			case 1:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0320_16;
+				break;
+			case 2:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0800_16;
+				break;
+			case 3:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_1000_16;
+				break;
+			case 4:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_1600_16;
+				break;
+		}
+
+		printk("Reading LC3 Music header (%p)\n", streams[j].data_ptr);
+		printk("======================\n");
+
+		ret = lc3bin_read_header(&streams[j].data_ptr, &frame_us, &srate_hz, &nchannels, &nsamples);
+
+		printk("Frame size: %dus\n", frame_us);
+		printk("Sample rate: %dHz\n", srate_hz);
+		printk("Number of channels: %d\n", nchannels);
+		printk("Number of samples: %d\n", nsamples);
+
+		/* Store position of start and end+1 of frame blocks */
+		streams[j].start_data_ptr = streams[j].data_ptr;
+		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
+			(sdu + 2); // TBD
+
+		stream_params[j].stream = &streams[j].stream;
+		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
+	}
+
+	create_param.params_count = ARRAY_SIZE(subgroup_param);
+	create_param.params = subgroup_param;
+	create_param.qos = &preset_16_mono.qos;
+	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
+	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
+
+	err = bt_bap_broadcast_source_create(&create_param, source);
+	if (err != 0) {
+		printk("Unable to create broadcast source: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+#endif
 
 int main(void)
 {
@@ -350,7 +439,7 @@ int main(void)
 	/* Broadcast Audio Streaming Endpoint advertising data */
 	NET_BUF_SIMPLE_DEFINE(ad_buf,
 				BT_UUID_SIZE_16 + BT_AUDIO_BROADCAST_ID_SIZE);
-	NET_BUF_SIMPLE_DEFINE(base_buf, 128);
+	NET_BUF_SIMPLE_DEFINE(base_buf, 256);
 	struct bt_data ext_ad[3];
 	struct bt_data per_ad;
 	uint32_t broadcast_id;
