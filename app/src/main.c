@@ -334,6 +334,9 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	return 0;
 }
 #elif defined(CONFIG_BASE_CONFIG_5_16M)
+struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+char *lang[] = {"eng","deu","fra","spa","ita"};
+
 static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 {
 	int frame_us;
@@ -349,16 +352,21 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	struct bt_bap_broadcast_source_subgroup_param
 		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
 	struct bt_bap_broadcast_source_param create_param = {0};
-	uint8_t mono[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
-					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_MONO_AUDIO))};
 	int err;
 
 	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+
+		memcpy(&subgroup_codec_cfg[i], &preset_16_mono.codec_cfg,
+				       sizeof(struct bt_audio_codec_cfg));
+
+		bt_audio_codec_cfg_meta_set_lang(&subgroup_codec_cfg[i], lang[i]);
+
+		/* MONO is implicit if omitted */
+		bt_audio_codec_cfg_unset_val(&subgroup_codec_cfg[i], BT_AUDIO_CODEC_CFG_CHAN_ALLOC);
+
 		subgroup_param[i].params_count = 1;
 		subgroup_param[i].params = &stream_params[i];
-		subgroup_param[i].codec_cfg = &preset_16_mono.codec_cfg;
-
-		// TODO: Set different languages for each subgroup.
+		subgroup_param[i].codec_cfg = &subgroup_codec_cfg[i];
 	}
 
 	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
@@ -367,8 +375,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 		 * identification by frequency analysis on the sink side.
 		 * TBD: How big frequency jumps should be used for good identification.
 		 */
-		stream_params[j].data = mono;
-		stream_params[j].data_len = sizeof(mono);
+		stream_params[j].data = NULL;
+		stream_params[j].data_len = 0;
 		samples_per_frame = 160;
 		sdu = preset_16_mono.qos.sdu;
 		switch(j) {
@@ -500,6 +508,7 @@ int main(void)
 	per_ad.type = BT_DATA_SVC_DATA16;
 	per_ad.data_len = base_buf.len;
 	per_ad.data = base_buf.data;
+	printk("PA data len = %d\n", per_ad.data_len);
 	err = bt_le_per_adv_set_data(adv, &per_ad, 1);
 	if (err != 0) {
 		printk("Failed to set periodic advertising data: %d\n",
