@@ -11,7 +11,12 @@ choice BASE_CONFIGURATION
 config BASE_CONFIG_24S_16S
 	bool "24 KHz stereo and 16 KHz stereo"
 	help
-	  Using the 4 configuration.
+	  Using the BASE_CONFIG_24S_16S configuration.
+
+config BASE_CONFIG_48S_24S
+	bool "48 KHz stereo and 24 KHz stereo"
+	help
+	  Using the BASE_CONFIG_48S_24S configuration.
 
 config BASE_CONFIG_5_16M
 	bool "5 subgroups with 16 KHz mono"
