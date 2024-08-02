@@ -64,6 +64,7 @@ static struct broadcast_source_stream {
 	uint8_t *data_ptr;
 	uint8_t *start_data_ptr;
 	uint8_t *end_data_ptr;
+	int sdu;
 } streams[CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT];
 static struct bt_bap_broadcast_source *broadcast_source;
 
@@ -190,7 +191,7 @@ static void send_data(struct broadcast_source_stream *source_stream)
 	}
 
 	net_buf_reserve(buf, BT_ISO_CHAN_SEND_RESERVE);
-	net_buf_add_mem(buf, read_buffer, stream->qos->sdu);
+	net_buf_add_mem(buf, read_buffer, source_stream->sdu);
 
 	ret = bt_bap_stream_send(stream, buf, source_stream->seq_num++);
 	if (ret < 0) {
@@ -315,6 +316,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
 			(sdu + 2); // TBD
 
+		streams[j].sdu = sdu;
+
 		stream_params[j].stream = &streams[j].stream;
 		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
 	}
@@ -413,6 +416,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
 			(sdu + 2); // TBD
 
+		streams[j].sdu = sdu;
+
 		stream_params[j].stream = &streams[j].stream;
 		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
 	}
@@ -509,6 +514,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 		streams[j].start_data_ptr = streams[j].data_ptr;
 		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
 			(sdu + 2); // TBD
+
+		streams[j].sdu = sdu;
 
 		stream_params[j].stream = &streams[j].stream;
 		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
