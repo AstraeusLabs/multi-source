@@ -23,6 +23,11 @@ config BASE_CONFIG_5_16M
 	help
 	  Using the BASE_CONFIG_5_16M configuration.
 
+config BASE_CONFIG_1_16FL
+	bool "1 subgroups with 16 KHz Front Left"
+	help
+	  Using the BASE_CONFIG_1_16FL configuration.
+
 endchoice
 
 config BROADCAST_CODE
