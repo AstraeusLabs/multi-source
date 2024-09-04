@@ -28,6 +28,11 @@ config BASE_CONFIG_1_16FL
 	help
 	  Using the BASE_CONFIG_1_16FL configuration.
 
+config BASE_CONFIG_1_48FL
+	bool "1 subgroups with 48 KHz Front Left"
+	help
+	  Using the BASE_CONFIG_1_48FL configuration.
+
 endchoice
 
 config BROADCAST_CODE

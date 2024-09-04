@@ -57,6 +57,10 @@ static struct bt_bap_lc3_preset preset_48_stereo = BT_BAP_LC3_BROADCAST_PRESET_4
 	BT_AUDIO_LOCATION_FRONT_LEFT | BT_AUDIO_LOCATION_FRONT_RIGHT,
 	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
 
+static struct bt_bap_lc3_preset preset_48_front_left = BT_BAP_LC3_BROADCAST_PRESET_48_2_1(
+	BT_AUDIO_LOCATION_FRONT_LEFT,
+	BT_AUDIO_CONTEXT_TYPE_UNSPECIFIED);
+
 #include "sine_data.h"
 
 static struct broadcast_source_stream {
@@ -328,7 +332,7 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 
 	create_param.params_count = ARRAY_SIZE(subgroup_param);
 	create_param.params = subgroup_param;
-	create_param.qos = &preset_24_stereo.qos; // TBD, this should be the qos from the larger config if multiple
+	create_param.qos = &preset_48_stereo.qos; // TBD, this should be the qos from the larger config if multiple
 	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
 	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
 
@@ -544,7 +548,7 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	return 0;
 }
 #elif defined(CONFIG_BASE_CONFIG_1_16FL)
-#define BT_AUDIO_BROADCAST_NAME "Multi 1x 16M"
+#define BT_AUDIO_BROADCAST_NAME "Multi 1x 16FL"
 
 struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
 
@@ -569,7 +573,7 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 
 	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
 
-		memcpy(&subgroup_codec_cfg[i], &preset_16_front_left.codec_cfg,
+		memcpy(&subgroup_codec_cfg[i], &preset_48_front_left.codec_cfg,
 				       sizeof(struct bt_audio_codec_cfg));
 
 		subgroup_param[i].params_count = 1;
@@ -608,6 +612,82 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	create_param.params_count = ARRAY_SIZE(subgroup_param);
 	create_param.params = subgroup_param;
 	create_param.qos = &preset_16_front_left.qos;
+	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
+	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
+
+	err = bt_bap_broadcast_source_create(&create_param, source);
+	if (err != 0) {
+		printk("Unable to create broadcast source: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
+#elif defined(CONFIG_BASE_CONFIG_1_48FL)
+#define BT_AUDIO_BROADCAST_NAME "Multi 1x 48FL"
+
+struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+
+static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
+{
+	int frame_us;
+	int srate_hz;
+	int nchannels;
+	int nsamples;
+	int sdu;
+	int ret;
+	int samples_per_frame;
+
+	struct bt_bap_broadcast_source_stream_param
+		stream_params[CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT];
+	struct bt_bap_broadcast_source_subgroup_param
+		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+	struct bt_bap_broadcast_source_param create_param = {0};
+	uint8_t left[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
+					      BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_FRONT_LEFT))};
+	int err;
+
+	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+
+		memcpy(&subgroup_codec_cfg[i], &preset_48_front_left.codec_cfg,
+				       sizeof(struct bt_audio_codec_cfg));
+
+		subgroup_param[i].params_count = 1;
+		subgroup_param[i].params = &stream_params[i];
+		subgroup_param[i].codec_cfg = &subgroup_codec_cfg[i];
+	}
+
+	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
+		stream_params[j].data = left;
+		stream_params[j].data_len = sizeof(left);
+		samples_per_frame = 480;
+		sdu = preset_48_front_left.qos.sdu;
+		streams[j].data_ptr = (uint8_t *)lc3_sine_1000_48;
+
+		printk("Reading LC3 Music header (%p)\n", streams[j].data_ptr);
+		printk("======================\n");
+
+		ret = lc3bin_read_header(&streams[j].data_ptr, &frame_us, &srate_hz, &nchannels, &nsamples);
+
+		printk("Frame size: %dus\n", frame_us);
+		printk("Sample rate: %dHz\n", srate_hz);
+		printk("Number of channels: %d\n", nchannels);
+		printk("Number of samples: %d\n", nsamples);
+
+		/* Store position of start and end+1 of frame blocks */
+		streams[j].start_data_ptr = streams[j].data_ptr;
+		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
+			(sdu + 2); // TBD
+
+		streams[j].sdu = sdu;
+
+		stream_params[j].stream = &streams[j].stream;
+		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
+	}
+
+	create_param.params_count = ARRAY_SIZE(subgroup_param);
+	create_param.params = subgroup_param;
+	create_param.qos = &preset_48_front_left.qos;
 	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
 	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
 
