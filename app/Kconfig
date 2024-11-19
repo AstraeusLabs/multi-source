@@ -33,6 +33,20 @@ config BASE_CONFIG_1_48FL
 	help
 	  Using the BASE_CONFIG_1_48FL configuration.
 
+config BASE_CONFIG_1_16M
+	bool "1 subgroups with 16 KHz Mono"
+	help
+		Using the BASE_CONFIG_1_16M configuration.
+
+config BASE_CONFIG_1_24M
+	bool "1 subgroups with 24 KHz Mono"
+	help
+		Using the BASE_CONFIG_1_24M configuration.
+
+config BASE_CONFIG_1_48M
+	bool "1 subgroups with 48 KHz Mono"
+	help
+		Using the BASE_CONFIG_1_48M configuration.
 endchoice
 
 config BROADCAST_CODE
