@@ -10,6 +10,7 @@
 #include <zephyr/bluetooth/audio/audio.h>
 #include <zephyr/bluetooth/audio/bap.h>
 #include <zephyr/bluetooth/audio/bap_lc3_preset.h>
+#include <zephyr/drivers/hwinfo.h>
 
 BUILD_ASSERT(strlen(CONFIG_BROADCAST_CODE) <= BT_AUDIO_BROADCAST_CODE_SIZE,
 	     "Invalid broadcast code");
@@ -547,6 +548,126 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 
 	return 0;
 }
+#elif defined(CONFIG_BASE_CONFIG_2_16M)
+#define BT_AUDIO_BROADCAST_NAME "Multi 2x 16M"
+
+struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+char *lang[] = {"eng","deu"};
+char *pinfo[] = {"Very nice", "sehr schön"};
+
+#define BT_AUDIO_METADATA_TYPE_ASSISTED_LISTENING_STREAM  0x0A
+
+static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
+{
+	int frame_us;
+	int srate_hz;
+	int nchannels;
+	int nsamples;
+	int sdu;
+	int ret;
+	int samples_per_frame;
+
+	struct bt_bap_broadcast_source_stream_param
+		stream_params[CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT];
+	struct bt_bap_broadcast_source_subgroup_param
+		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+	struct bt_bap_broadcast_source_param create_param = {0};
+	int err;
+	uint8_t BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED = 0;
+
+	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+
+		memcpy(&subgroup_codec_cfg[i], &preset_16_mono.codec_cfg,
+				       sizeof(struct bt_audio_codec_cfg));
+
+		bt_audio_codec_cfg_meta_set_lang(&subgroup_codec_cfg[i], lang[i]);
+		bt_audio_codec_cfg_meta_set_program_info(
+			&subgroup_codec_cfg[i],
+			pinfo[i], strlen(pinfo[i])
+
+		);
+
+		switch(i) {
+			case 0:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_DISABLED);
+				bt_audio_codec_cfg_meta_set_val(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_METADATA_TYPE_ASSISTED_LISTENING_STREAM,
+					&BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED,
+					sizeof(BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED));
+				break;
+			case 1:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_ENABLED);
+				bt_audio_codec_cfg_meta_set_parental_rating(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_PARENTAL_RATING_AGE_10_OR_ABOVE);
+				break;
+		}
+
+		/* MONO is implicit if omitted */
+		bt_audio_codec_cfg_unset_val(&subgroup_codec_cfg[i], BT_AUDIO_CODEC_CFG_CHAN_ALLOC);
+
+		subgroup_param[i].params_count = 1;
+		subgroup_param[i].params = &stream_params[i];
+		subgroup_param[i].codec_cfg = &subgroup_codec_cfg[i];
+	}
+
+	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
+		/**
+		 * Use different frequencies for each BIS to allow
+		 * identification by frequency analysis on the sink side.
+		 * TBD: How big frequency jumps should be used for good identification.
+		 */
+		stream_params[j].data = NULL;
+		stream_params[j].data_len = 0;
+		samples_per_frame = 160;
+		sdu = preset_16_mono.qos.sdu;
+		switch(j) {
+			case 0:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0200_16;
+				break;
+			case 1:
+				streams[j].data_ptr = (uint8_t *)lc3_sine_0320_16;
+				break;
+		}
+
+		printk("Reading LC3 Music header (%p)\n", streams[j].data_ptr);
+		printk("======================\n");
+
+		ret = lc3bin_read_header(&streams[j].data_ptr, &frame_us, &srate_hz, &nchannels, &nsamples);
+
+		printk("Frame size: %dus\n", frame_us);
+		printk("Sample rate: %dHz\n", srate_hz);
+		printk("Number of channels: %d\n", nchannels);
+		printk("Number of samples: %d\n", nsamples);
+
+		/* Store position of start and end+1 of frame blocks */
+		streams[j].start_data_ptr = streams[j].data_ptr;
+		streams[j].end_data_ptr = streams[j].data_ptr + (nsamples / samples_per_frame) *
+			(sdu + 2); // TBD
+
+		streams[j].sdu = sdu;
+
+		stream_params[j].stream = &streams[j].stream;
+		bt_bap_stream_cb_register(stream_params[j].stream, &stream_ops);
+	}
+
+	create_param.params_count = ARRAY_SIZE(subgroup_param);
+	create_param.params = subgroup_param;
+	create_param.qos = &preset_16_mono.qos;
+	create_param.encryption = strlen(CONFIG_BROADCAST_CODE) > 0;
+	create_param.packing = BT_ISO_PACKING_SEQUENTIAL;
+
+	err = bt_bap_broadcast_source_create(&create_param, source);
+	if (err != 0) {
+		printk("Unable to create broadcast source: %d\n", err);
+		return err;
+	}
+
+	return 0;
+}
 #elif defined(CONFIG_BASE_CONFIG_1_16FL)
 #define BT_AUDIO_BROADCAST_NAME "Multi 1x 16FL"
 
@@ -704,7 +825,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 int main(void)
 {
 	struct bt_le_ext_adv *adv;
-	int err;
+	int err, ret;
+	uint8_t hwid[3];
 
 	err = bt_enable(NULL);
 	if (err) {
@@ -744,10 +866,15 @@ int main(void)
 		return 0;
 	}
 
-	err = bt_bap_broadcast_source_get_id(broadcast_source, &broadcast_id);
-	if (err != 0) {
-		printk("Unable to get broadcast ID: %d\n", err);
-		return 0;
+	/**
+	 * Use 3 bytes from the hwid, to make Broadcast ID static but
+	 * 'unique' per device.
+	 */
+	ret = hwinfo_get_device_id(hwid, sizeof(hwid));
+	if (ret == sizeof(hwid)) {
+		memcpy(&broadcast_id, hwid, sizeof(hwid));
+	} else {
+		broadcast_id = 0xDEADBF; // Fallback
 	}
 
 	/* Setup extended advertising data */
