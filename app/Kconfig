@@ -28,13 +28,18 @@ config BASE_CONFIG_2_16M
 	help
 	  Using the BASE_CONFIG_2_16M configuration.
 
+config BASE_CONFIG_24M_16M
+	bool "24 KHz mono and 16 KHz mono"
+	help
+	  Using the BASE_CONFIG_24M_16M configuration.
+
 config BASE_CONFIG_1_16FL
-	bool "1 subgroups with 16 KHz Front Left"
+	bool "1 subgroup with 16 KHz Front Left"
 	help
 	  Using the BASE_CONFIG_1_16FL configuration.
 
 config BASE_CONFIG_1_48FL
-	bool "1 subgroups with 48 KHz Front Left"
+	bool "1 subgroup with 48 KHz Front Left"
 	help
 	  Using the BASE_CONFIG_1_48FL configuration.
 
