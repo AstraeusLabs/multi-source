@@ -960,6 +960,8 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 #define BT_AUDIO_BROADCAST_NAME "Multi 24M 16M"
 
 struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+char *lang[] = {"eng","deu"};
+char *pinfo[] = {"Very nice", "Sehr schön"};
 
 static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 {
@@ -977,14 +979,39 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 		subgroup_param[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
 	struct bt_bap_broadcast_source_param create_param = {0};
 	int err;
+	uint8_t BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED = 0;
 
 	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
-
 		memcpy(&subgroup_codec_cfg[i], i == 0 ? &preset_24_mono.codec_cfg : &preset_16_mono.codec_cfg,
 				       sizeof(struct bt_audio_codec_cfg));
 
 		/* MONO is implicit if omitted */
 		bt_audio_codec_cfg_unset_val(&subgroup_codec_cfg[i], BT_AUDIO_CODEC_CFG_CHAN_ALLOC);
+		bt_audio_codec_cfg_meta_set_lang(&subgroup_codec_cfg[i], lang[i]);
+		bt_audio_codec_cfg_meta_set_program_info(
+			&subgroup_codec_cfg[i],
+			pinfo[i], strlen(pinfo[i])
+
+		);
+
+		switch(i) {
+			case 0:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_DISABLED);
+				bt_audio_codec_cfg_meta_set_val(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_METADATA_TYPE_ASSISTED_LISTENING_STREAM,
+					&BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED,
+					sizeof(BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED));
+				break;
+			case 1:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_ENABLED);
+				bt_audio_codec_cfg_meta_set_parental_rating(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_PARENTAL_RATING_AGE_10_OR_ABOVE);
+				break;
+		}
 
 		subgroup_param[i].params_count = 1;
 		subgroup_param[i].params = &stream_params[i];
