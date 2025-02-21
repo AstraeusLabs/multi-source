@@ -13,6 +13,21 @@ config BASE_CONFIG_24S_16S
 	help
 	  Using the BASE_CONFIG_24S_16S configuration.
 
+config BASE_CONFIG_1_16S
+	bool "16 KHz stereo in one subgroup"
+	help
+	  Using the BASE_CONFIG_1_16S configuration.
+
+config BASE_CONFIG_1_24S
+	bool "24 KHz stereo in one subgroup"
+	help
+	  Using the BASE_CONFIG_1_24S configuration.
+
+config BASE_CONFIG_1_48S
+	bool "48 KHz stereo in one subgroup"
+	help
+	  Using the BASE_CONFIG_1_48S configuration.
+
 config BASE_CONFIG_48S_24S
 	bool "48 KHz stereo and 24 KHz stereo"
 	help
