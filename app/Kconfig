@@ -6,7 +6,7 @@ mainmenu "Bluetooth: Broadcast Audio Source"
 
 choice BASE_CONFIGURATION
 	prompt "The BASE configuration to be used"
-	default BASE_CONFIG_24S_16S
+#	default BASE_CONFIG_24S_16S
 
 config BASE_CONFIG_24S_16S
 	bool "24 KHz stereo and 16 KHz stereo"

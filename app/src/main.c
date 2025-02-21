@@ -250,6 +250,10 @@ static struct bt_bap_stream_ops stream_ops = {
 #if defined(CONFIG_BASE_CONFIG_24S_16S)
 #define BT_AUDIO_BROADCAST_NAME "Multi 24S 16S"
 
+struct bt_audio_codec_cfg subgroup_codec_cfg[CONFIG_BT_BAP_BROADCAST_SRC_SUBGROUP_COUNT];
+char *lang[] = {"eng","deu"};
+char *pinfo[] = {"Very nice", "Sehr schön"};
+
 static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 {
 	int frame_us;
@@ -270,11 +274,42 @@ static int setup_broadcast_source(struct bt_bap_broadcast_source **source)
 	uint8_t right[] = {BT_AUDIO_CODEC_DATA(BT_AUDIO_CODEC_CFG_CHAN_ALLOC,
 					       BT_BYTES_LIST_LE32(BT_AUDIO_LOCATION_FRONT_RIGHT))};
 	int err;
+	uint8_t BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED = 0;
 
 	for (size_t i = 0U; i < ARRAY_SIZE(subgroup_param); i++) {
+
+		memcpy(&subgroup_codec_cfg[i], i == 0 ? &preset_24_stereo.codec_cfg : &preset_16_stereo.codec_cfg,
+				       sizeof(struct bt_audio_codec_cfg));
+
+		bt_audio_codec_cfg_meta_set_lang(&subgroup_codec_cfg[i], lang[i]);
+		bt_audio_codec_cfg_meta_set_program_info(
+			&subgroup_codec_cfg[i],
+			pinfo[i], strlen(pinfo[i])
+
+		);
+
+		switch(i) {
+			case 0:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_DISABLED);
+				bt_audio_codec_cfg_meta_set_val(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_METADATA_TYPE_ASSISTED_LISTENING_STREAM,
+					&BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED,
+					sizeof(BT_AUDIO_ASSISTED_LISTENING_STREAM_UNSPECIFIED));
+				break;
+			case 1:
+				bt_audio_codec_cfg_meta_set_audio_active_state(&subgroup_codec_cfg[i],
+									       BT_AUDIO_ACTIVE_STATE_ENABLED);
+				bt_audio_codec_cfg_meta_set_parental_rating(
+					&subgroup_codec_cfg[i],
+					BT_AUDIO_PARENTAL_RATING_AGE_10_OR_ABOVE);
+				break;
+		}
+
 		subgroup_param[i].params_count = 2;
 		subgroup_param[i].params = stream_params + i * 2;
-		subgroup_param[i].codec_cfg = i == 0 ? &preset_24_stereo.codec_cfg : &preset_16_stereo.codec_cfg;
+		subgroup_param[i].codec_cfg = &subgroup_codec_cfg[i];
 	}
 
 	for (size_t j = 0U; j < ARRAY_SIZE(stream_params); j++) {
