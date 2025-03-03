@@ -28,6 +28,11 @@ config BASE_CONFIG_1_48S
 	help
 	  Using the BASE_CONFIG_1_48S configuration.
 
+config BASE_CONFIG_48S_24M
+	bool "48 KHz stereo and 24 KHz mono"
+	help
+	  Using the BASE_CONFIG_48S_24M configuration.
+
 config BASE_CONFIG_48S_24S
 	bool "48 KHz stereo and 24 KHz stereo"
 	help
@@ -47,6 +52,11 @@ config BASE_CONFIG_24M_16M
 	bool "24 KHz mono and 16 KHz mono"
 	help
 	  Using the BASE_CONFIG_24M_16M configuration.
+
+config BASE_CONFIG_48M_24M
+	bool "48 KHz mono and 24 KHz mono"
+	help
+	  Using the BASE_CONFIG_48M_24M configuration.
 
 config BASE_CONFIG_1_16FL
 	bool "1 subgroup with 16 KHz Front Left"
